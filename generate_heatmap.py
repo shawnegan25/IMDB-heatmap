@@ -87,7 +87,11 @@ def gen_heatmap(title: str):
     cmap = LinearSegmentedColormap.from_list(
         "RedYellowGreen", ["#d62727", "#f5e505", "#15f505"]
     )
-    fig, ax = plt.subplots(figsize=(8, 8))
+    num_seasons = len(episode_df.columns)
+    multiplier = 1
+    if num_seasons > 16:
+        multiplier = 2
+    fig, ax = plt.subplots(figsize=(8*multiplier, 8))
     ax.xaxis.tick_top()
     ax.set_title(title, fontsize=20)
     average_rating = str(round(np.mean(episode_df), 1))
