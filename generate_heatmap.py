@@ -109,7 +109,7 @@ def gen_heatmap(title: str):
     fig.text(0.50, 0.02, f'Average Rating: {average_rating}',
              horizontalalignment='center',
              wrap=True) 
-    fig.savefig(f".\heatmaps\{title}_Episode_Heatmap.png", dpi=200)
+    fig.savefig(f"{title.replace(' ', '_')}_Heatmap.png", dpi=200)
 
 
 if __name__ == "__main__":
