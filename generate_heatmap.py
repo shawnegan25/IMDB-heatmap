@@ -18,13 +18,20 @@ header = {
     }
 
 
-def search_imdb(title: str):
+def search_imdb(title: str, start_year=0, end_year=0):
     """
     get soup from imdb search page
     """
     title = title.replace(" ", "%20")
+    url = f"https://www.imdb.com/search/title/?title={title}&title_type=tv_series,tv_miniseries"
+    if start_year:
+        url += f"&release_date={start_year}-01-01,"
+    if not start_year and end_year:
+        url += "&release_date=,"
+    if end_year:
+        url += f"{end_year}-12-31"
     response = requests.get(
-        url=f"https://www.imdb.com/search/title/?title={title}&title_type=tv_series",
+        url=url,
         headers=header,
         timeout=20,
     )
@@ -37,11 +44,11 @@ def search_imdb(title: str):
     return imdb_id
 
 
-def get_episode_ratings(title: str):
+def get_episode_ratings(title: str, start_year=0, end_year=0):
     '''
     pull per-episode IMDB ratings
     '''
-    imdb_id = search_imdb(title)
+    imdb_id = search_imdb(title, start_year, end_year)
     response = requests.get(
         url=f"https://www.imdb.com/title/{imdb_id}/episodes/",
         headers=header,
@@ -49,6 +56,7 @@ def get_episode_ratings(title: str):
     )
 
     soup = BeautifulSoup(response.content, features="html.parser")
+    imdb_title = soup.find_all("h2", {"data-testid": "subtitle"})[0].text
     seasons = soup.find_all("a", attrs={"data-testid": "tab-season-entry"})
     season_numbers = [season.text for season in seasons]
 
@@ -73,19 +81,20 @@ def get_episode_ratings(title: str):
             end = rating.text.find("/")
             episode_ratings[season_number][episode_count] = rating.text[:end]
             episode_count += 1
-    return episode_ratings
+    return imdb_title, episode_ratings
 
 
-def gen_heatmap(title: str):
+def gen_heatmap(title: str, start_year=0, end_year=0):
     """
     Generate heatmap for imdb show episode ratings
     """
-    episode_dict = get_episode_ratings(title)
+    imdb_title, episode_dict = get_episode_ratings(title, start_year, end_year)
     episode_df = pd.DataFrame(data=episode_dict, dtype=np.float32).replace(
         to_replace=pd.NA, value=np.nan
     )
+    episode_df.loc['AVG'] = episode_df.mean(axis=0)
     cmap = LinearSegmentedColormap.from_list(
-        "RedYellowGreen", ["#d62727", "#f5e505", "#15f505"]
+        "RedOrangeYellowGreen", ["#d62727", "#f5b402", "#f5e505", "#15f505"]
     )
     num_seasons = len(episode_df.columns)
     multiplier = 1
@@ -93,12 +102,12 @@ def gen_heatmap(title: str):
         multiplier = 2
     fig, ax = plt.subplots(figsize=(8*multiplier, 8))
     ax.xaxis.tick_top()
-    ax.set_title(title, fontsize=20)
+    ax.set_title(imdb_title, fontsize=20)
     average_rating = str(round(np.mean(episode_df), 1))
     sns.heatmap(
         episode_df,
         cmap=cmap,
-        vmin=episode_df.min().min(),
+        vmin=7.0,
         vmax=10.0,
         linewidths=1,
         annot=True,
@@ -113,7 +122,7 @@ def gen_heatmap(title: str):
     fig.text(0.50, 0.02, f'Average Rating: {average_rating}',
              horizontalalignment='center',
              wrap=True) 
-    fig.savefig(f"{title.replace(' ', '_')}_Heatmap.png", dpi=200)
+    fig.savefig(f"{imdb_title.replace(' ', '_')}_Heatmap.png", dpi=200)
 
 
 if __name__ == "__main__":
@@ -123,5 +132,13 @@ if __name__ == "__main__":
                         type=str,
                         dest='title',
                         help="Provide the title of the IMDB TV show to retreive episode ratings.")
+    parser.add_argument('-s', '--start_year',
+                        type=int,
+                        dest='start_year',
+                        help="Provide the start year of the IMDB TV show to retreive episode ratings.")
+    parser.add_argument('-e', '--end_year',
+                        type=int,
+                        dest='end_year',
+                        help="Provide the end year of the IMDB TV show to retreive episode ratings.")
     args = parser.parse_args()
-    gen_heatmap(args.title)
+    gen_heatmap(args.title, args.start_year, args.end_year)
